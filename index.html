@@ -3,127 +3,257 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Solar AI Command</title>
+    <title>Solar AI Command Center</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        body { background: #0f172a; color: white; font-family: 'Segoe UI', sans-serif; }
-        .card { background: #1e293b; border: 1px solid #334155; border-radius: 15px; }
-        .text-neon { color: #38bdf8; text-shadow: 0 0 10px rgba(56, 189, 248, 0.5); }
-        .status-dot { height: 12px; width: 12px; background-color: #22c55e; border-radius: 50%; display: inline-block; }
-        .offline { background-color: #ef4444; }
+        /* Sci-Fi Dark Theme */
+        body { background-color: #0b0f19; color: #e2e8f0; font-family: 'Segoe UI', Roboto, sans-serif; }
+        
+        /* Cards */
+        .glass-card {
+            background: rgba(30, 41, 59, 0.7);
+            backdrop-filter: blur(10px);
+            border: 1px solid #334155;
+            border-radius: 16px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.5);
+            transition: transform 0.3s ease;
+        }
+        .glass-card:hover { transform: translateY(-5px); border-color: #64748b; }
+
+        /* Neon Text Effects */
+        .text-neon-blue { color: #38bdf8; text-shadow: 0 0 15px rgba(56, 189, 248, 0.5); }
+        .text-neon-green { color: #4ade80; text-shadow: 0 0 15px rgba(74, 222, 128, 0.5); }
+        .text-neon-yellow { color: #facc15; text-shadow: 0 0 15px rgba(250, 204, 21, 0.5); }
+
+        /* Status Dots */
+        .status-dot { width: 10px; height: 10px; border-radius: 50%; display: inline-block; margin-right: 8px; }
+        .dot-online { background-color: #22c55e; box-shadow: 0 0 10px #22c55e; }
+        .dot-offline { background-color: #ef4444; box-shadow: 0 0 10px #ef4444; }
+        .dot-warning { background-color: #eab308; box-shadow: 0 0 10px #eab308; }
+
+        /* Loader */
+        .loading-overlay { position: fixed; top:0; left:0; width:100%; height:100%; background: #0b0f19; z-index: 999; display: flex; justify-content: center; align-items: center; transition: opacity 0.5s; }
     </style>
 </head>
-<body class="p-4">
+<body class="p-3 p-md-5">
+
+<div id="loader" class="loading-overlay">
+    <div class="text-center">
+        <div class="spinner-border text-info mb-3" role="status"></div>
+        <div class="text-neon-blue">Establishing Secure Connection...</div>
+    </div>
+</div>
 
 <div class="container">
-    <div class="d-flex justify-content-between align-items-center mb-4">
-        <h2><i class="fas fa-solar-panel text-warning"></i> Solar AI Command</h2>
+    <div class="d-flex justify-content-between align-items-center mb-5">
+        <div>
+            <h2 class="fw-bold text-white"><i class="fas fa-solar-panel text-neon-yellow me-2"></i> SOLAR COMMAND</h2>
+            <div class="small text-muted"><i class="fas fa-map-marker-alt me-1"></i> <span id="location">Detecting...</span></div>
+        </div>
         <div class="text-end">
-            <span class="badge bg-dark border border-secondary" id="time-display">--:--</span>
-            <div class="small text-muted">Banda, UP</div>
+            <div class="badge bg-dark border border-secondary px-3 py-2" id="timestamp">--:--</div>
+            <div class="small text-success mt-1"><i class="fas fa-satellite-dish"></i> Live Feed</div>
         </div>
     </div>
 
-    <div class="row mb-4 g-3">
-        <div class="col-md-3">
-            <div class="p-3 bg-dark rounded border border-secondary d-flex align-items-center">
-                <div id="dongle-dot" class="status-dot me-2"></div>
-                <div>
-                    <div class="small text-muted">Dongle Status</div>
-                    <strong id="dongle-status">Checking...</strong>
+    <div class="row g-3 mb-4">
+        <div class="col-md-4">
+            <div class="glass-card p-3 d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center">
+                    <div id="dongle-dot" class="status-dot dot-warning"></div>
+                    <div>
+                        <div class="small text-muted text-uppercase">Dongle</div>
+                        <div class="fw-bold" id="dongle-status">Waiting...</div>
+                    </div>
+                </div>
+                <i class="fas fa-wifi text-secondary"></i>
+            </div>
+        </div>
+
+        <div class="col-md-4">
+            <div class="glass-card p-3 d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center">
+                    <div id="grid-dot" class="status-dot dot-warning"></div>
+                    <div>
+                        <div class="small text-muted text-uppercase">Grid</div>
+                        <div class="fw-bold" id="grid-status">Checking...</div>
+                    </div>
+                </div>
+                <div class="text-end">
+                    <div class="small text-muted">Voltage</div>
+                    <div class="fw-bold text-info" id="grid-volts">-- V</div>
                 </div>
             </div>
         </div>
-        <div class="col-md-3">
-            <div class="p-3 bg-dark rounded border border-secondary d-flex align-items-center">
-                <div id="grid-dot" class="status-dot me-2"></div>
-                <div>
-                    <div class="small text-muted">Grid Status</div>
-                    <strong id="grid-status">Checking...</strong>
+
+        <div class="col-md-4">
+            <div class="glass-card p-3 d-flex align-items-center justify-content-between">
+                <div class="d-flex align-items-center">
+                    <i class="fas fa-cloud-sun text-warning me-3 fs-4"></i>
+                    <div>
+                        <div class="small text-muted text-uppercase">Weather</div>
+                        <div class="fw-bold"><span id="temp">--</span>°C <span id="weather-desc" class="small fw-normal text-muted">--</span></div>
+                    </div>
                 </div>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="p-3 bg-dark rounded border border-secondary">
-                <div class="small text-muted">Grid Voltage</div>
-                <strong id="grid-volts">-- V</strong>
-            </div>
-        </div>
-        <div class="col-md-3">
-            <div class="p-3 bg-dark rounded border border-secondary">
-                <div class="small text-muted">Outside Temp</div>
-                <strong id="weather-temp">-- °C</strong> <span id="weather-cond" class="small text-secondary"></span>
             </div>
         </div>
     </div>
 
     <div class="row g-4">
-        <div class="col-md-6">
-            <div class="card h-100 p-4 text-center">
-                <h4 class="text-muted text-uppercase mb-3">Live Output</h4>
-                <div class="display-1 fw-bold text-neon" id="solar-now">--</div>
-                <div class="fs-4 text-muted">Watts</div>
+        <div class="col-lg-6">
+            <div class="glass-card h-100 p-5 text-center position-relative overflow-hidden">
+                <div class="position-absolute top-0 end-0 p-3 opacity-25">
+                    <i class="fas fa-bolt fa-5x text-warning"></i>
+                </div>
+                <h5 class="text-muted text-uppercase mb-4">Current Output</h5>
+                <div class="display-1 fw-bold text-neon-green mb-2">
+                    <span id="current-power">--</span>
+                </div>
+                <div class="fs-4 text-muted mb-4">WATTS</div>
+                
+                <div class="row border-top border-secondary pt-4">
+                    <div class="col-6 border-end border-secondary">
+                        <div class="small text-muted">TODAY</div>
+                        <div class="fs-5 fw-bold text-white"><span id="today-kwh">--</span> kWh</div>
+                    </div>
+                    <div class="col-6">
+                        <div class="small text-muted">TOTAL LIFETIME</div>
+                        <div class="fs-5 fw-bold text-white"><span id="total-kwh">--</span> kWh</div>
+                    </div>
+                </div>
             </div>
         </div>
 
-        <div class="col-md-6">
-            <div class="card h-100 p-4">
-                <h5 class="text-white mb-3"><i class="fas fa-brain text-info"></i> AI Analysis</h5>
-                <div class="d-flex justify-content-between mb-3">
-                    <span>Predicted Output:</span>
-                    <strong class="text-info" id="ai-pred">-- W</strong>
+        <div class="col-lg-6">
+            <div class="glass-card h-100 p-4">
+                <div class="d-flex justify-content-between align-items-center mb-4">
+                    <h5 class="text-white m-0"><i class="fas fa-brain text-neon-blue me-2"></i> AI Analysis</h5>
+                    <span class="badge bg-primary bg-opacity-25 text-primary border border-primary">BETA</span>
                 </div>
-                <div class="d-flex justify-content-between mb-3">
-                    <span>Performance Score:</span>
-                    <strong class="text-success" id="ai-score">--%</strong>
+
+                <div class="mb-4">
+                    <div class="d-flex justify-content-between small mb-1">
+                        <span class="text-muted">Weather Efficiency Score</span>
+                        <span class="text-neon-blue fw-bold" id="eff-score">--%</span>
+                    </div>
+                    <div class="progress" style="height: 6px; background: #1e293b;">
+                        <div id="eff-bar" class="progress-bar bg-info" role="progressbar" style="width: 0%"></div>
+                    </div>
                 </div>
-                <hr class="border-secondary">
-                <p class="small text-muted mb-0" id="ai-msg">Analyzing weather patterns...</p>
+
+                <div class="bg-dark bg-opacity-50 rounded p-3 border border-secondary mb-3">
+                    <div class="row text-center">
+                        <div class="col-6 border-end border-secondary">
+                            <div class="small text-muted mb-1">PREDICTED</div>
+                            <div class="fs-4 fw-bold text-info"><span id="pred-watts">--</span> W</div>
+                        </div>
+                        <div class="col-6">
+                            <div class="small text-muted mb-1">ACTUAL</div>
+                            <div class="fs-4 fw-bold text-success"><span id="actual-watts-small">--</span> W</div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="d-flex align-items-start mt-3">
+                    <i class="fas fa-robot text-secondary me-2 mt-1"></i>
+                    <p class="small text-muted fst-italic mb-0" id="ai-msg">System initialized. Waiting for data stream...</p>
+                </div>
             </div>
         </div>
+    </div>
+    
+    <div class="text-center mt-5 text-muted small">
+        System Auto-Updates Every 15 Minutes • Powered by Growatt & OpenWeatherMap
     </div>
 </div>
 
 <script>
     async function updateDashboard() {
         try {
+            // Fetch the JSON file (with timestamp to prevent caching)
             const response = await fetch('solar_data.json?t=' + Date.now());
+            if (!response.ok) throw new Error("Data file missing");
             const data = await response.json();
-            // Solar Data
-            document.getElementById('solar-now').innerText = data.solar.current_watts;
-            
-            // Status Indicators
-            document.getElementById('dongle-status').innerText = data.dongle.status;
-            document.getElementById('dongle-dot').className = data.dongle.status === "Online" ? "status-dot" : "status-dot offline";
-            
-            document.getElementById('grid-status').innerText = data.grid.status;
-            document.getElementById('grid-volts').innerText = data.grid.voltage + " V";
-            
-            // Weather & Time
-            document.getElementById('weather-temp').innerText = data.environment.temp + " °C";
-            document.getElementById('weather-cond').innerText = data.environment.weather;
-            document.getElementById('time-display').innerText = data.timestamp;
 
-            // AI Logic Display
-            document.getElementById('ai-pred').innerText = data.environment.ai_prediction + " W";
-            document.getElementById('ai-score').innerText = data.environment.performance_score + "%";
-            
-            // Simple logic to change message
-            let diff = data.solar.current_watts - data.environment.ai_prediction;
-            if (diff > -500 && diff < 500) {
-                document.getElementById('ai-msg').innerText = "System is performing exactly as expected for this weather.";
-            } else if (diff < -500) {
-                document.getElementById('ai-msg').innerText = "Warning: Output lower than predicted. Check for panel shading.";
+            // --- 1. FILL SOLAR DATA ---
+            document.getElementById('current-power').innerText = data.solar.current_watts;
+            document.getElementById('actual-watts-small').innerText = data.solar.current_watts;
+            document.getElementById('today-kwh').innerText = data.solar.today_kwh;
+            document.getElementById('total-kwh').innerText = data.solar.total_kwh;
+            document.getElementById('timestamp').innerText = data.timestamp;
+            document.getElementById('location').innerText = data.environment.location;
+
+            // --- 2. STATUS INDICATORS ---
+            // Dongle
+            const dongleDot = document.getElementById('dongle-dot');
+            const dongleText = document.getElementById('dongle-status');
+            if (data.dongle.status === "Online") {
+                dongleDot.className = "status-dot dot-online";
+                dongleText.innerText = "Connected";
+                dongleText.className = "fw-bold text-success";
             } else {
-                document.getElementById('ai-msg').innerText = "Excellent! System is over-performing.";
+                dongleDot.className = "status-dot dot-offline";
+                dongleText.innerText = "Offline";
+                dongleText.className = "fw-bold text-danger";
             }
 
-        } catch (e) { console.log("Waiting for data..."); }
+            // Grid
+            const gridDot = document.getElementById('grid-dot');
+            const gridText = document.getElementById('grid-status');
+            document.getElementById('grid-volts').innerText = data.grid.voltage + " V";
+            
+            if (data.grid.voltage > 100) {
+                gridDot.className = "status-dot dot-online";
+                gridText.innerText = "Active";
+            } else {
+                gridDot.className = "status-dot dot-offline";
+                gridText.innerText = "Power Cut";
+            }
+
+            // --- 3. WEATHER & AI ---
+            document.getElementById('temp').innerText = data.environment.temp;
+            document.getElementById('weather-desc').innerText = data.environment.weather;
+            
+            // AI Prediction
+            document.getElementById('pred-watts').innerText = data.environment.ai_prediction;
+            document.getElementById('eff-score').innerText = data.environment.performance_score + "%";
+            document.getElementById('eff-bar').style.width = data.environment.performance_score + "%";
+
+            // AI Smart Message Logic
+            const actual = data.solar.current_watts;
+            const predicted = data.environment.ai_prediction;
+            const msgBox = document.getElementById('ai-msg');
+            
+            let diff = actual - predicted;
+            
+            if (actual === 0 && predicted > 50) {
+                 msgBox.innerText = "Generation is 0 but weather is good. Check inverter connection.";
+                 msgBox.className = "small text-danger fw-bold mb-0";
+            } else if (diff > 500) {
+                 msgBox.innerText = "Excellent efficiency! Panels are over-performing significantly.";
+                 msgBox.className = "small text-success fw-bold mb-0";
+            } else if (diff < -500) {
+                 msgBox.innerText = "Output is lower than expected. Check for shading or dust on panels.";
+                 msgBox.className = "small text-warning fw-bold mb-0";
+            } else {
+                 msgBox.innerText = "System is performing exactly as predicted for current weather conditions.";
+                 msgBox.className = "small text-muted fst-italic mb-0";
+            }
+
+            // Hide Loader on success
+            document.getElementById('loader').style.opacity = '0';
+            setTimeout(() => { document.getElementById('loader').style.display = 'none'; }, 500);
+
+        } catch (error) {
+            console.log("Waiting for data...");
+        }
     }
-    
+
+    // Run immediately and then every 5 seconds
     updateDashboard();
-    setInterval(updateDashboard, 3000);
+    setInterval(updateDashboard, 5000);
 </script>
+
 </body>
 </html>
