@@ -1,0 +1,129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Solar AI Command</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+    <style>
+        body { background: #0f172a; color: white; font-family: 'Segoe UI', sans-serif; }
+        .card { background: #1e293b; border: 1px solid #334155; border-radius: 15px; }
+        .text-neon { color: #38bdf8; text-shadow: 0 0 10px rgba(56, 189, 248, 0.5); }
+        .status-dot { height: 12px; width: 12px; background-color: #22c55e; border-radius: 50%; display: inline-block; }
+        .offline { background-color: #ef4444; }
+    </style>
+</head>
+<body class="p-4">
+
+<div class="container">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2><i class="fas fa-solar-panel text-warning"></i> Solar AI Command</h2>
+        <div class="text-end">
+            <span class="badge bg-dark border border-secondary" id="time-display">--:--</span>
+            <div class="small text-muted">Banda, UP</div>
+        </div>
+    </div>
+
+    <div class="row mb-4 g-3">
+        <div class="col-md-3">
+            <div class="p-3 bg-dark rounded border border-secondary d-flex align-items-center">
+                <div id="dongle-dot" class="status-dot me-2"></div>
+                <div>
+                    <div class="small text-muted">Dongle Status</div>
+                    <strong id="dongle-status">Checking...</strong>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="p-3 bg-dark rounded border border-secondary d-flex align-items-center">
+                <div id="grid-dot" class="status-dot me-2"></div>
+                <div>
+                    <div class="small text-muted">Grid Status</div>
+                    <strong id="grid-status">Checking...</strong>
+                </div>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="p-3 bg-dark rounded border border-secondary">
+                <div class="small text-muted">Grid Voltage</div>
+                <strong id="grid-volts">-- V</strong>
+            </div>
+        </div>
+        <div class="col-md-3">
+            <div class="p-3 bg-dark rounded border border-secondary">
+                <div class="small text-muted">Outside Temp</div>
+                <strong id="weather-temp">-- °C</strong> <span id="weather-cond" class="small text-secondary"></span>
+            </div>
+        </div>
+    </div>
+
+    <div class="row g-4">
+        <div class="col-md-6">
+            <div class="card h-100 p-4 text-center">
+                <h4 class="text-muted text-uppercase mb-3">Live Output</h4>
+                <div class="display-1 fw-bold text-neon" id="solar-now">--</div>
+                <div class="fs-4 text-muted">Watts</div>
+            </div>
+        </div>
+
+        <div class="col-md-6">
+            <div class="card h-100 p-4">
+                <h5 class="text-white mb-3"><i class="fas fa-brain text-info"></i> AI Analysis</h5>
+                <div class="d-flex justify-content-between mb-3">
+                    <span>Predicted Output:</span>
+                    <strong class="text-info" id="ai-pred">-- W</strong>
+                </div>
+                <div class="d-flex justify-content-between mb-3">
+                    <span>Performance Score:</span>
+                    <strong class="text-success" id="ai-score">--%</strong>
+                </div>
+                <hr class="border-secondary">
+                <p class="small text-muted mb-0" id="ai-msg">Analyzing weather patterns...</p>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+    async function updateDashboard() {
+        try {
+            const response = await fetch('solar_data.json?t=' + Date.now());
+            const data = await response.json();
+            // Solar Data
+            document.getElementById('solar-now').innerText = data.solar.current_watts;
+            
+            // Status Indicators
+            document.getElementById('dongle-status').innerText = data.dongle.status;
+            document.getElementById('dongle-dot').className = data.dongle.status === "Online" ? "status-dot" : "status-dot offline";
+            
+            document.getElementById('grid-status').innerText = data.grid.status;
+            document.getElementById('grid-volts').innerText = data.grid.voltage + " V";
+            
+            // Weather & Time
+            document.getElementById('weather-temp').innerText = data.environment.temp + " °C";
+            document.getElementById('weather-cond').innerText = data.environment.weather;
+            document.getElementById('time-display').innerText = data.timestamp;
+
+            // AI Logic Display
+            document.getElementById('ai-pred').innerText = data.environment.ai_prediction + " W";
+            document.getElementById('ai-score').innerText = data.environment.performance_score + "%";
+            
+            // Simple logic to change message
+            let diff = data.solar.current_watts - data.environment.ai_prediction;
+            if (diff > -500 && diff < 500) {
+                document.getElementById('ai-msg').innerText = "System is performing exactly as expected for this weather.";
+            } else if (diff < -500) {
+                document.getElementById('ai-msg').innerText = "Warning: Output lower than predicted. Check for panel shading.";
+            } else {
+                document.getElementById('ai-msg').innerText = "Excellent! System is over-performing.";
+            }
+
+        } catch (e) { console.log("Waiting for data..."); }
+    }
+    
+    updateDashboard();
+    setInterval(updateDashboard, 3000);
+</script>
+</body>
+</html>
