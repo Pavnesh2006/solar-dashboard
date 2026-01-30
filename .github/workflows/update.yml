@@ -1,41 +1,37 @@
 name: Update Solar Data
 
 on:
-  workflow_dispatch:      # Allows manual click
+  workflow_dispatch:      # This line creates the Button
   schedule:
-    - cron: '*/15 * * * *' # Runs every 15 mins
-
-permissions:
-  contents: write
+    - cron: '*/15 * * * *'
 
 jobs:
-  run-solar-script:
+  fix-my-solar:
     runs-on: ubuntu-latest
     
     steps:
-      - name: 1. Checkout Code
+      - name: Checkout Code
         uses: actions/checkout@v3
 
-      - name: 2. Set up Python
+      - name: Set up Python
         uses: actions/setup-python@v4
         with:
           python-version: '3.9'
 
-      - name: 3. Install Tools (Directly)
-        run: |
-          pip install growattServer requests
+      - name: Install Libraries
+        run: pip install growattServer requests
 
-      - name: 4. Run Python Script
+      - name: Run Script
         env:
           GROWATT_USER: ${{ secrets.GROWATT_USER }}
-          GROWATT_PASSWORD: $
-          {{ secrets.GROWATT_PASSWORD }}
+          GROWATT_PASSWORD: ${{ secrets.GROWATT_PASSWORD }}
+          WEATHER_KEY: ${{ secrets.WEATHER_KEY }}
         run: python fetch_solar.py
 
-      - name: 5. Save Results
+      - name: Save Data
         run: |
           git config --global user.name "SolarBot"
           git config --global user.email "bot@noreply.github.com"
           git add solar_data.json
-          git commit -m "Updated solar stats" || exit 0
+          git commit -m "Update" || exit 0
           git push
