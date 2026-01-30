@@ -41,7 +41,7 @@ def fetch_data():
                 w_data = requests.get(url).json()
                 temp = w_data['main']['temp']
                 weather_desc = w_data['weather'][0]['main']
-                # AI Prediction (Simplified)
+                # AI Prediction
                 hour = datetime.datetime.now().hour + 5.5
                 if hour > 24: hour -= 24
                 if 6 <= hour <= 18:
