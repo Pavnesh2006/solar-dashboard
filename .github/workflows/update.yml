@@ -2,11 +2,11 @@ name: Update Solar Data
 
 on:
   schedule:
-    - cron: '*/15 * * * *'  # Runs every 15 minutes
-  workflow_dispatch:        # Allows you to click a button to run it manually
+    - cron: '*/15 * * * *'
+  workflow_dispatch:
 
 permissions:
-  contents: write           # Gives permission to save the JSON file back to the repo
+  contents: write
 
 jobs:
   refresh-data:
@@ -21,13 +21,13 @@ jobs:
       with:
         python-version: '3.9'
 
+    # --- CHANGED: Direct Installation (No text file needed) ---
     - name: Install Libraries
       run: |
-        pip install -r requirements.txt
+        pip install growattServer requests
 
     - name: Run Fetch Script
       env:
-        # We pass the secrets from GitHub Settings to the Python script
         GROWATT_USER: ${{ secrets.GROWATT_USER }}
         GROWATT_PASSWORD: ${{ secrets.GROWATT_PASSWORD }}
         WEATHER_KEY: ${{ secrets.WEATHER_KEY }}
@@ -37,7 +37,6 @@ jobs:
       run: |
         git config --global user.name "SolarBot"
         git config --global user.email "bot@noreply.github.com"
-        # We try to commit. If no data changed, we exit safely instead of crashing.
         git add solar_data.json
         git commit -m "Auto-update solar stats" || exit 0
         git push
