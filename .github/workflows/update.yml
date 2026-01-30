@@ -21,7 +21,7 @@ jobs:
       with:
         python-version: '3.9'
 
-    # --- CHANGED: Direct Installation (No text file needed) ---
+    # --- CHANGED: Direct Install (Bypassing requirements.txt) ---
     - name: Install Libraries
       run: |
         pip install growattServer requests
