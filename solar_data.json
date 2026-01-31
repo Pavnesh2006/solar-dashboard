@@ -1,6 +1,6 @@
 {
     "meta": {
-        "timestamp": "01:02 AM",
+        "timestamp": "01:22 AM",
         "date": "01 Feb 2026",
         "prediction": 0.0
     },
@@ -15,8 +15,8 @@
         "voltage": 0.0
     },
     "environment": {
-        "weather": "Clear",
-        "temp": "25\u00b0C",
+        "weather": "Partly",
+        "temp": "cloudy",
         "location": "Banda, UP"
     }
 }
