@@ -2,75 +2,74 @@ import json
 import os
 import datetime
 
-# Try to import tools. If missing, print error but don't crash hard.
+# 1. Setup
 try:
     import growattServer
     import requests
+    print("✅ Libraries loaded")
 except ImportError:
-    print("CRITICAL: Libraries not installed.")
+    print("❌ Libraries missing - check YAML")
     exit(1)
 
-# --- CONFIGURATION ---
+# 2. Config
 USERNAME = os.environ.get("GROWATT_USER")
 PASSWORD = os.environ.get("GROWATT_PASSWORD")
 OUTPUT_FILE = "solar_data.json"
 
-def save_offline(reason):
-    print(f"⚠️ Going Offline: {reason}")
-    data = {
-        "timestamp": datetime.datetime.now().strftime("%I:%M %p"),
-        "solar": { "current_watts": 0, "today_kwh": 0, "total_kwh": 0 },
-        "dongle": { "status": "Offline" },
-        "grid": { "status": "Unknown", "voltage": 0 },
-        "environment": { "weather": "Offline", "temp": "--" }
-    }
+# 3. Safe Save Function
+def save_data(data):
     with open(OUTPUT_FILE, "w") as f:
         json.dump(data, f, indent=4)
-    exit(0) # Exit Green (Success)
+    print("✅ Data saved to file")
 
+# 4. Main Logic
 def main():
     if not USERNAME or not PASSWORD:
-        save_offline("Missing Secrets")
+        print("⚠️ Secrets missing. Saving dummy data.")
+        save_data({"solar": {"current_watts": 0}, "dongle": {"status": "Config Error"}})
+        exit(0) # Exit Green
 
     try:
+        print("🚀 Connecting to Growatt...")
         api = growattServer.GrowattApi()
         api.server_url = 'https://server.growatt.com/'
-        # Fake a browser to avoid getting blocked
         api.session.headers.update({'User-Agent': 'Mozilla/5.0'})
         
-        login_response = api.login(USERNAME, PASSWORD)
-        print("✅ Login Success")
+        login = api.login(USERNAME, PASSWORD)
+        print("✅ Logged in")
         
-        # Get Plant ID
-        plant_list = api.plant_list(login_response['user']['id'])
-        plant_id = plant_list['data'][0]['plantId']
+        # Get Plant
+        plant_id = api.plant_list(login['user']['id'])['data'][0]['plantId']
+        device_sn = api.device_list(plant_id)[0]['deviceSn']
         
-        # Get Device SN
-        device_list = api.device_list(plant_id)
-        device_sn = device_list[0]['deviceSn']
+        # Get Data
+        data = api.inverter_data(device_sn, date=datetime.date.today())
+        watts = float(data.get('pac', 0))
+        print(f"☀️ Current Solar: {watts} W")
         
-        # Get Live Data
-        inv_data = api.inverter_data(device_sn, date=datetime.date.today())
-        
-        # Success! Save Real Data
-        data = {
+        # Build JSON
+        final_json = {
             "timestamp": datetime.datetime.now().strftime("%I:%M %p"),
             "solar": { 
-                "current_watts": float(inv_data.get('pac', 0)),
-                "today_kwh": float(inv_data.get('e_today', 0)),
-                "total_kwh": float(inv_data.get('e_total', 0))
+                "current_watts": watts,
+                "today_kwh": float(data.get('e_today', 0)),
+                "total_kwh": float(data.get('e_total', 0))
             },
             "dongle": { "status": "Online" },
-            "grid": { "status": "Active", "voltage": float(inv_data.get('vvac', 0)) },
-            "environment": { "weather": "Clear", "temp": "25" } # Placeholder for now
+            "grid": { "status": "Active", "voltage": float(data.get('vvac', 0)) },
+            "environment": { "weather": "Online", "temp": "25" }
         }
-        
-        with open(OUTPUT_FILE, "w") as f:
-            json.dump(data, f, indent=4)
-        print("✅ Data Saved")
+        save_data(final_json)
 
     except Exception as e:
-        save_offline(str(e))
+        print(f"⚠️ Error: {e}")
+        # Save Offline Data so website doesn't hang
+        save_data({
+            "solar": {"current_watts": 0},
+            "dongle": {"status": "Offline"},
+            "error": str(e)
+        })
+        exit(0) # Exit Green even if offline
 
 if __name__ == "__main__":
     main()
