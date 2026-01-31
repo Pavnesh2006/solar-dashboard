@@ -1,13 +1,19 @@
 {
-    "timestamp": "Manual Start",
-    "solar": { "current_watts": 0, "today_kwh": 0, "total_kwh": 0, "status_code": 0 },
-    "grid": { "voltage": 0, "status": "Waiting..." },
-    "dongle": { "status": "Offline", "signal": "None" },
-    "environment": { 
-        "location": "Banda", 
-        "temp": "--", 
-        "weather": "Offline", 
-        "ai_prediction": 0, 
-        "performance_score": 0 
+    "timestamp": "12:00 PM",
+    "solar": {
+        "current_watts": 0.0,
+        "today_kwh": 0.0,
+        "total_kwh": 0.0
+    },
+    "dongle": {
+        "status": "Online"
+    },
+    "grid": {
+        "status": "Active",
+        "voltage": 0.0
+    },
+    "environment": {
+        "weather": "Online",
+        "temp": "25"
     }
 }
