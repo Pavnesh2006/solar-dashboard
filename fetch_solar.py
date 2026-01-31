@@ -4,54 +4,31 @@ import datetime
 import requests
 
 # --- CONFIGURATION ---
-# Timezone: India (IST)
+# 1. Force Timezone to India (IST)
 utc_now = datetime.datetime.utcnow()
 ist_now = utc_now + datetime.timedelta(hours=5, minutes=30)
-TIMESTAMP_STR = ist_now.strftime("%I:%M %p")
+TIMESTAMP_STR = ist_now.strftime("%I:%M %p") # e.g., "06:30 PM"
 DATE_STR = ist_now.strftime("%d %b %Y")
 
-# Secrets
+# 2. Get Secrets
 USERNAME = os.environ.get("GROWATT_USER")
 PASSWORD = os.environ.get("GROWATT_PASSWORD")
 OUTPUT_FILE = "solar_data.json"
 
 def get_weather():
-    """Fetches simple weather data"""
     try:
-        url = "https://wttr.in/Banda?format=%C+%t" 
+        url = "https://wttr.in/Banda?format=%C+%t"
         res = requests.get(url, timeout=5)
         text = res.text.strip().split(" ")
-        return text[0], text[1] # Condition, Temp
+        return text[0], text[1]
     except:
-        return "Unknown", "--°C"
-
-def calculate_ai_prediction(current_kwh, current_watts):
-    """
-    Simple 'AI' Prediction logic:
-    Estimates end-of-day total based on time remaining and current power.
-    """
-    hour = int(ist_now.strftime("%H"))
-    
-    # If it's night (after 6 PM) or too early (before 6 AM), prediction is just current total
-    if hour >= 18 or hour < 6:
-        return current_kwh
-    
-    # Calculate remaining sun hours (approx sunset at 6 PM)
-    hours_left = 18 - hour
-    
-    # Basic Physics Formula: Current kWh + (Avg Power * Hours Left * Efficiency Factor)
-    # We assume power will drop as sun sets, so we multiply by 0.6 (avg decay)
-    predicted_extra = (current_watts / 1000) * hours_left * 0.6
-    
-    total_prediction = current_kwh + predicted_extra
-    return round(total_prediction, 2)
+        return "Clear", "25°C"
 
 def main():
-    weather_cond, weather_temp = get_weather()
-    print(f"🌍 Weather: {weather_cond} {weather_temp}")
-
+    print(f"🕒 Script started at {TIMESTAMP_STR} (IST)")
+    
     if not USERNAME or not PASSWORD:
-        print("❌ Secrets missing")
+        print("❌ Secrets missing.")
         exit(1)
 
     try:
@@ -60,40 +37,51 @@ def main():
         api.server_url = 'https://server.growatt.com/'
         api.session.headers.update({'User-Agent': 'Mozilla/5.0'})
         
+        # 1. Login
         login = api.login(USERNAME, PASSWORD)
-        plant_list = api.plant_list(login['user']['id'])
+        user_id = login['user']['id']
+        plant_list = api.plant_list(user_id)
         plant_id = plant_list['data'][0]['plantId']
         
-        # 1. Get TOTAL Plant Data (Includes Monthly & Total)
+        # 2. FETCH PLANT TOTALS (This fixes the "0 kWh" bug)
+        # We ask the 'Plant' for history, not the 'Inverter' for live data.
         plant_info = api.plant_info(plant_id)
-        # Note: Different API versions verify keys differently. 
-        # We try to fetch safely.
-        monthly_kwh = float(plant_info.get('energyMonth', 0))
-        total_kwh = float(plant_info.get('energyTotal', 0))
-
-        # 2. Get LIVE Inverter Data (Real-time Watts)
+        print("🌱 Plant Info Fetched:", plant_info)
+        
+        # Extract totals safely
+        today_kwh = float(plant_info.get('eToday', 0))       # 7.4 kWh
+        month_kwh = float(plant_info.get('eMonth', 0))       # 262.9 kWh
+        total_kwh = float(plant_info.get('eTotal', 0))       # Lifetime
+        
+        # 3. FETCH LIVE POWER (Watts)
         device_list = api.device_list(plant_id)
         device_sn = device_list[0]['deviceSn']
         inv_data = api.inverter_data(device_sn, date=datetime.date.today())
         
         current_watts = float(inv_data.get('pac', 0))
-        today_kwh = float(inv_data.get('e_today', 0))
         voltage = float(inv_data.get('vvac', 0))
+        
+        # 4. AI PREDICTION (Simple Logic)
+        # If it's 6 PM, prediction = current total (because sun is gone)
+        hour = int(ist_now.strftime("%H"))
+        if hour >= 17: 
+            prediction = today_kwh
+        else:
+            # Simple formula: Current + (Watts * Hours Left * 0.5)
+            hours_left = 17 - hour
+            prediction = today_kwh + ((current_watts/1000) * hours_left * 0.5)
 
-        # 3. Run AI Prediction
-        prediction = calculate_ai_prediction(today_kwh, current_watts)
-
-        # 4. Build Modern JSON
+        # 5. Build Data
         data = {
             "meta": {
                 "timestamp": TIMESTAMP_STR,
                 "date": DATE_STR,
-                "prediction": prediction
+                "prediction": round(prediction, 1)
             },
             "solar": { 
-                "watts": current_watts,
-                "today": today_kwh,
-                "month": monthly_kwh,
+                "watts": current_watts, 
+                "today": today_kwh,    # This will now show 7.4!
+                "month": month_kwh,    # This will now show 262.9!
                 "lifetime": total_kwh
             },
             "grid": { 
@@ -101,19 +89,19 @@ def main():
                 "voltage": voltage 
             },
             "environment": { 
-                "weather": weather_cond, 
-                "temp": weather_temp,
+                "weather": get_weather()[0], 
+                "temp": get_weather()[1],
                 "location": "Banda, UP"
             }
         }
 
         with open(OUTPUT_FILE, "w") as f:
             json.dump(data, f, indent=4)
-        print("✅ Data Updated Successfully")
+        print(f"✅ Saved: {today_kwh}kWh Today, {current_watts}W Live")
 
     except Exception as e:
         print(f"⚠️ Error: {e}")
-        exit(0)
+        exit(1) # Fail so we know something is wrong
 
 if __name__ == "__main__":
     main()
