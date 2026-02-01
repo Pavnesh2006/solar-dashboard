@@ -1,113 +1,71 @@
-import json
-import os
-import datetime
-import requests
 import growattServer
+import requests
+import os
 
-# --- CONFIGURATION ---
-utc_now = datetime.datetime.utcnow()
-ist_now = utc_now + datetime.timedelta(hours=5, minutes=30)
-TIMESTAMP_STR = ist_now.strftime("%I:%M %p")
-DATE_STR = ist_now.strftime("%d %b %Y")
-
+# CREDENTIALS
 USERNAME = os.environ.get("GROWATT_USER")
 PASSWORD = os.environ.get("GROWATT_PASSWORD")
-OUTPUT_FILE = "solar_data.json"
 
-def get_weather():
-    try:
-        url = "https://wttr.in/Banda?format=%C+%t"
-        res = requests.get(url, timeout=5)
-        text = res.text.strip().split(" ")
-        return text[0], text[1]
-    except:
-        return "Clear", "25°C"
+# LIST OF DOORS TO KNOCK ON
+SERVERS = [
+    "https://server.growatt.com/",       # Global (The one we tried)
+    "https://server-api.growatt.com/",   # Mobile App API
+    "https://openapi.growatt.com/",      # Open API
+    "https://server-us.growatt.com/",    # US Server (Sometimes works)
+    "https://oss.growatt.com/"           # Installer Server
+]
+
+# LIST OF DISGUISES (User Agents)
+AGENTS = [
+    # Chrome on Windows
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36',
+    # Growatt App (iPhone)
+    'Growatt/2.0 (iPhone; iOS 15.0; Scale/3.00)',
+    # Android App
+    'Dalvik/2.1.0 (Linux; U; Android 11; SM-G991B Build/RP1A.200720.012)'
+]
 
 def main():
-    print(f"🚀 Starting Script: {TIMESTAMP_STR}")
+    print("🕵️ STARTING CLOUD SERVER HUNT...")
     
-    if not USERNAME or not PASSWORD:
-        print("❌ Secrets missing.")
-        exit(1)
+    found_any = False
 
-    try:
-        api = growattServer.GrowattApi()
-        
-        # --- THE FIX THAT WORKED ON YOUR LAPTOP ---
-        # This line tricks the server into thinking we are Chrome
-        api.session.headers.update({
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36'
-        })
-        
-        # This is the URL that your test confirmed works
-        api.server_url = 'https://server.growatt.com/'
+    for server in SERVERS:
+        print(f"\n👉 Trying Server: {server}")
+        for agent in AGENTS:
+            try:
+                api = growattServer.GrowattApi()
+                api.server_url = server
+                api.session.headers.update({'User-Agent': agent})
+                
+                login = api.login(USERNAME, PASSWORD)
+                user_id = login['user']['id']
+                
+                # If we get here, Login worked. NOW CHECK FOR REAL DATA.
+                plant_list = api.plant_list(user_id)
+                plant_id = plant_list['data'][0]['plantId']
+                
+                # Check Plant Total (If this is > 0, we found a working server!)
+                plant_info = api.plant_info(plant_id)
+                total_energy = float(plant_info.get('eTotal', 0))
+                
+                if total_energy > 0:
+                    print(f"✅✅ JACKPOT! WORKING COMBINATION FOUND!")
+                    print(f"Server: {server}")
+                    print(f"Agent: {agent}")
+                    print(f"Data: {total_energy} kWh")
+                    found_any = True
+                    return # Stop searching, we found it!
+                else:
+                    print(f"❌ Login OK, but Data is 0 (Soft Block).")
 
-        login = api.login(USERNAME, PASSWORD)
-        print(f"✅ Login Success! (User ID: {login['user']['id']})")
-        
-        # Get Plant Data
-        plant_list = api.plant_list(login['user']['id'])
-        plant_id = plant_list['data'][0]['plantId']
-        
-        # Get Dashboard Totals (Always correct)
-        plant_info = api.plant_info(plant_id)
-        
-        today_kwh = float(plant_info.get('eToday', 0))
-        month_kwh = float(plant_info.get('eMonth', 0))
-        total_kwh = float(plant_info.get('eTotal', 0))
-        
-        # Get Live Power
-        device_list = api.device_list(plant_id)
-        device_sn = device_list[0]['deviceSn']
-        
-        # Try-Catch for Live Data
-        try:
-            inv_data = api.inverter_data(device_sn, date=datetime.date.today())
-            current_watts = float(inv_data.get('pac', 0))
-            voltage = float(inv_data.get('vvac', 0))
-        except:
-            current_watts = 0
-            voltage = 0
+            except Exception as e:
+                # print(f"❌ Failed: {e}") 
+                pass # Just keep trying silently
 
-        # AI Prediction
-        hour = int(ist_now.strftime("%H"))
-        if hour >= 17:
-            prediction = today_kwh
-        else:
-            hours_left = 17 - hour
-            prediction = today_kwh + ((current_watts/1000) * hours_left * 0.5)
-
-        # Build Data
-        data = {
-            "meta": {
-                "timestamp": TIMESTAMP_STR,
-                "date": DATE_STR,
-                "prediction": round(prediction, 1)
-            },
-            "solar": { 
-                "watts": current_watts, 
-                "today": today_kwh,
-                "month": month_kwh,
-                "lifetime": total_kwh
-            },
-            "grid": { 
-                "status": "Active" if voltage > 100 else "Grid Failure", 
-                "voltage": voltage 
-            },
-            "environment": { 
-                "weather": get_weather()[0], 
-                "temp": get_weather()[1],
-                "location": "Banda, UP"
-            }
-        }
-
-        with open(OUTPUT_FILE, "w") as f:
-            json.dump(data, f, indent=4)
-        print(f"✅ Data Saved: {current_watts}W | {today_kwh}kWh")
-
-    except Exception as e:
-        print(f"❌ Error: {e}")
-        exit(1)
+    if not found_any:
+        print("\n💀 CONCLUSION: Growatt has blocked ALL GitHub Cloud IPs.")
+        print("You MUST use the Laptop Method.")
 
 if __name__ == "__main__":
     main()
