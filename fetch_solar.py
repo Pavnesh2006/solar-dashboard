@@ -4,13 +4,11 @@ import datetime
 import requests
 
 # --- CONFIGURATION ---
-# 1. Force Timezone to India (IST)
 utc_now = datetime.datetime.utcnow()
 ist_now = utc_now + datetime.timedelta(hours=5, minutes=30)
-TIMESTAMP_STR = ist_now.strftime("%I:%M %p") # e.g., "06:30 PM"
+TIMESTAMP_STR = ist_now.strftime("%I:%M %p")
 DATE_STR = ist_now.strftime("%d %b %Y")
 
-# 2. Get Secrets
 USERNAME = os.environ.get("GROWATT_USER")
 PASSWORD = os.environ.get("GROWATT_PASSWORD")
 OUTPUT_FILE = "solar_data.json"
@@ -25,7 +23,7 @@ def get_weather():
         return "Clear", "25°C"
 
 def main():
-    print(f"🕒 Script started at {TIMESTAMP_STR} (IST)")
+    print(f"☀️ Hybrid Script Started: {TIMESTAMP_STR}")
     
     if not USERNAME or not PASSWORD:
         print("❌ Secrets missing.")
@@ -37,41 +35,39 @@ def main():
         api.server_url = 'https://server.growatt.com/'
         api.session.headers.update({'User-Agent': 'Mozilla/5.0'})
         
-        # 1. Login
         login = api.login(USERNAME, PASSWORD)
-        user_id = login['user']['id']
-        plant_list = api.plant_list(user_id)
-        plant_id = plant_list['data'][0]['plantId']
+        plant_id = api.plant_list(login['user']['id'])['data'][0]['plantId']
         
-        # 2. FETCH PLANT TOTALS (This fixes the "0 kWh" bug)
-        # We ask the 'Plant' for history, not the 'Inverter' for live data.
+        # 1. GET TOTALS (From Dashboard - Always Correct)
         plant_info = api.plant_info(plant_id)
-        print("🌱 Plant Info Fetched:", plant_info)
+        today_kwh = float(plant_info.get('eToday', 0))
+        month_kwh = float(plant_info.get('eMonth', 0))
+        total_kwh = float(plant_info.get('eTotal', 0))
         
-        # Extract totals safely
-        today_kwh = float(plant_info.get('eToday', 0))       # 7.4 kWh
-        month_kwh = float(plant_info.get('eMonth', 0))       # 262.9 kWh
-        total_kwh = float(plant_info.get('eTotal', 0))       # Lifetime
-        
-        # 3. FETCH LIVE POWER (Watts)
+        # 2. GET LIVE STATUS (From Inverter - For Voltage & Watts)
         device_list = api.device_list(plant_id)
         device_sn = device_list[0]['deviceSn']
-        inv_data = api.inverter_data(device_sn, date=datetime.date.today())
         
-        current_watts = float(inv_data.get('pac', 0))
-        voltage = float(inv_data.get('vvac', 0))
-        
-        # 4. AI PREDICTION (Simple Logic)
-        # If it's 6 PM, prediction = current total (because sun is gone)
+        try:
+            # Ask Inverter for real-time data
+            inv_data = api.inverter_data(device_sn, date=datetime.date.today())
+            current_watts = float(inv_data.get('pac', 0))
+            voltage = float(inv_data.get('vvac', 0))
+        except:
+            # If Inverter is offline/sleeping, assume 0
+            current_watts = 0
+            voltage = 0
+
+        # 3. AI PREDICTION
         hour = int(ist_now.strftime("%H"))
-        if hour >= 17: 
+        if hour >= 17:
             prediction = today_kwh
         else:
-            # Simple formula: Current + (Watts * Hours Left * 0.5)
             hours_left = 17 - hour
+            # Improve prediction by using current generation trend
             prediction = today_kwh + ((current_watts/1000) * hours_left * 0.5)
 
-        # 5. Build Data
+        # 4. DATA PACKAGING
         data = {
             "meta": {
                 "timestamp": TIMESTAMP_STR,
@@ -80,11 +76,12 @@ def main():
             },
             "solar": { 
                 "watts": current_watts, 
-                "today": today_kwh,    # This will now show 7.4!
-                "month": month_kwh,    # This will now show 262.9!
+                "today": today_kwh,
+                "month": month_kwh,
                 "lifetime": total_kwh
             },
             "grid": { 
+                # If voltage is real (>100V), say Active. Else Failure.
                 "status": "Active" if voltage > 100 else "Grid Failure", 
                 "voltage": voltage 
             },
@@ -97,11 +94,11 @@ def main():
 
         with open(OUTPUT_FILE, "w") as f:
             json.dump(data, f, indent=4)
-        print(f"✅ Saved: {today_kwh}kWh Today, {current_watts}W Live")
+        print(f"✅ Success: {today_kwh}kWh | {current_watts}W | {voltage}V")
 
     except Exception as e:
         print(f"⚠️ Error: {e}")
-        exit(1) # Fail so we know something is wrong
+        exit(1)
 
 if __name__ == "__main__":
     main()
