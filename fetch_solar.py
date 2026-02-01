@@ -2,6 +2,7 @@ import json
 import os
 import datetime
 import requests
+import growattServer
 
 # --- CONFIGURATION ---
 utc_now = datetime.datetime.utcnow()
@@ -23,51 +24,60 @@ def get_weather():
         return "Clear", "25°C"
 
 def main():
-    print(f"☀️ Hybrid Script Started: {TIMESTAMP_STR}")
+    print(f"🚀 Starting Script: {TIMESTAMP_STR}")
     
     if not USERNAME or not PASSWORD:
         print("❌ Secrets missing.")
         exit(1)
 
     try:
-        import growattServer
         api = growattServer.GrowattApi()
+        
+        # --- THE FIX THAT WORKED ON YOUR LAPTOP ---
+        # This line tricks the server into thinking we are Chrome
+        api.session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36'
+        })
+        
+        # This is the URL that your test confirmed works
         api.server_url = 'https://server.growatt.com/'
-        api.session.headers.update({'User-Agent': 'Mozilla/5.0'})
-        
+
         login = api.login(USERNAME, PASSWORD)
-        plant_id = api.plant_list(login['user']['id'])['data'][0]['plantId']
+        print(f"✅ Login Success! (User ID: {login['user']['id']})")
         
-        # 1. GET TOTALS (From Dashboard - Always Correct)
+        # Get Plant Data
+        plant_list = api.plant_list(login['user']['id'])
+        plant_id = plant_list['data'][0]['plantId']
+        
+        # Get Dashboard Totals (Always correct)
         plant_info = api.plant_info(plant_id)
+        
         today_kwh = float(plant_info.get('eToday', 0))
         month_kwh = float(plant_info.get('eMonth', 0))
         total_kwh = float(plant_info.get('eTotal', 0))
         
-        # 2. GET LIVE STATUS (From Inverter - For Voltage & Watts)
+        # Get Live Power
         device_list = api.device_list(plant_id)
         device_sn = device_list[0]['deviceSn']
         
+        # Try-Catch for Live Data
         try:
-            # Ask Inverter for real-time data
             inv_data = api.inverter_data(device_sn, date=datetime.date.today())
             current_watts = float(inv_data.get('pac', 0))
             voltage = float(inv_data.get('vvac', 0))
         except:
-            # If Inverter is offline/sleeping, assume 0
             current_watts = 0
             voltage = 0
 
-        # 3. AI PREDICTION
+        # AI Prediction
         hour = int(ist_now.strftime("%H"))
         if hour >= 17:
             prediction = today_kwh
         else:
             hours_left = 17 - hour
-            # Improve prediction by using current generation trend
             prediction = today_kwh + ((current_watts/1000) * hours_left * 0.5)
 
-        # 4. DATA PACKAGING
+        # Build Data
         data = {
             "meta": {
                 "timestamp": TIMESTAMP_STR,
@@ -81,7 +91,6 @@ def main():
                 "lifetime": total_kwh
             },
             "grid": { 
-                # If voltage is real (>100V), say Active. Else Failure.
                 "status": "Active" if voltage > 100 else "Grid Failure", 
                 "voltage": voltage 
             },
@@ -94,10 +103,10 @@ def main():
 
         with open(OUTPUT_FILE, "w") as f:
             json.dump(data, f, indent=4)
-        print(f"✅ Success: {today_kwh}kWh | {current_watts}W | {voltage}V")
+        print(f"✅ Data Saved: {current_watts}W | {today_kwh}kWh")
 
     except Exception as e:
-        print(f"⚠️ Error: {e}")
+        print(f"❌ Error: {e}")
         exit(1)
 
 if __name__ == "__main__":
